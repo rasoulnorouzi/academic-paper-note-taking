@@ -1,0 +1,8 @@
+# Local prototype - never push
+scholarlens/
+
+node_modules/
+dist/
+.env
+.env.*
+*.local
