@@ -10,6 +10,16 @@ const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 const BAD_KEY = 'The API key is not valid. Check the key.';
 const RATE_LIMIT = 'The provider set a rate limit. Wait, then try again.';
 const BAD_JSON = 'The model did not return valid JSON. Try again, or use a different model.';
+const STOPPED = 'Stopped.';
+
+// The user can stop the batch. Both call paths must show the stop, not a provider error.
+function isAbort(error: unknown): boolean {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes('abort');
+}
 
 export async function analyze(
   provider: Provider,
@@ -17,11 +27,12 @@ export async function analyze(
   apiKey: string,
   text: string,
   filename: string,
+  signal?: AbortSignal,
 ): Promise<PaperSummary> {
   const raw =
     provider === 'deepseek'
-      ? await callDeepSeek(model, apiKey, text)
-      : await callGemini(model, apiKey, text);
+      ? await callDeepSeek(model, apiKey, text, signal)
+      : await callGemini(model, apiKey, text, signal);
 
   let parsed: unknown;
   try {
@@ -32,7 +43,12 @@ export async function analyze(
   return toSummary(parsed, filename);
 }
 
-async function callDeepSeek(model: string, apiKey: string, text: string): Promise<string> {
+async function callDeepSeek(
+  model: string,
+  apiKey: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<string> {
   const body = {
     model,
     messages: [
@@ -46,14 +62,23 @@ async function callDeepSeek(model: string, apiKey: string, text: string): Promis
     temperature: 0.2,
   };
 
-  const response = await fetch(DEEPSEEK_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(DEEPSEEK_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: signal,
+    });
+  } catch (error) {
+    if (isAbort(error)) {
+      throw new Error(STOPPED);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const snippet = (await response.text().catch(() => '')).slice(0, 200);
@@ -73,7 +98,12 @@ async function callDeepSeek(model: string, apiKey: string, text: string): Promis
   return content;
 }
 
-async function callGemini(model: string, apiKey: string, text: string): Promise<string> {
+async function callGemini(
+  model: string,
+  apiKey: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
 
   let content: string | undefined;
@@ -86,10 +116,14 @@ async function callGemini(model: string, apiKey: string, text: string): Promise<
         responseSchema: geminiResponseSchema() as Schema,
         systemInstruction: SYSTEM_PROMPT,
         temperature: 0.1,
+        abortSignal: signal,
       },
     });
     content = response.text;
   } catch (error) {
+    if (isAbort(error)) {
+      throw new Error(STOPPED);
+    }
     throw new Error(sdkMessage(error));
   }
 

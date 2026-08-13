@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import SummaryView from './SummaryView';
 import { DEEPSEEK_MODELS, GEMINI_MODELS } from './types';
 import type { ModelOption, PaperJob, Provider } from './types';
@@ -8,6 +8,8 @@ import { loadKeys, saveKey, clearKey } from './storage';
 import { buildMarkdown, downloadMarkdown } from './export';
 
 type Phase = 'setup' | 'working' | 'results';
+
+const STOPPED_TEXT = 'Stopped. Use Retry to run this paper.';
 
 const STATUS_WORDS: Record<PaperJob['status'], string> = {
   queued: 'Queued',
@@ -52,6 +54,10 @@ export default function App() {
   const [viewingIndex, setViewingIndex] = useState<number>(0);
   const [message, setMessage] = useState<string>('');
 
+  // The Stop button aborts the request in flight and stops the loop before the next paper.
+  const abortRef = useRef<AbortController | null>(null);
+  const stopRef = useRef(false);
+
   const models = modelsFor(provider);
   const activeKey = keys[provider];
   const saveFlag = saveKeyFlags[provider];
@@ -65,10 +71,26 @@ export default function App() {
   function changeKey(value: string) {
     setKeys({ ...keys, [provider]: value });
     setMessage('');
+    // Write the key now. A key that is saved only at the start of the batch can
+    // come back wrong after a failed start or a page refresh.
+    if (saveFlag) {
+      if (value.trim() === '') {
+        clearKey(provider);
+      } else {
+        saveKey(provider, value);
+      }
+    }
   }
 
   function changeSaveFlag(value: boolean) {
     setSaveKeyFlags({ ...saveKeyFlags, [provider]: value });
+    if (value) {
+      if (activeKey.trim() !== '') {
+        saveKey(provider, activeKey);
+      }
+    } else {
+      clearKey(provider);
+    }
   }
 
   function addFiles(fileList: FileList | null) {
@@ -118,23 +140,49 @@ export default function App() {
     setJobs(queued);
     setViewingIndex(0);
     setPhase('working');
-    runBatch(queued, provider, model, activeKey);
+
+    stopRef.current = false;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    runBatch(queued, provider, model, activeKey, controller.signal);
   }
 
-  async function runBatch(startJobs: PaperJob[], p: Provider, m: string, key: string) {
+  function stopAnalysis() {
+    stopRef.current = true;
+    abortRef.current?.abort();
+  }
+
+  async function runBatch(
+    startJobs: PaperJob[],
+    p: Provider,
+    m: string,
+    key: string,
+    signal: AbortSignal,
+  ) {
     let list = startJobs;
     for (let i = 0; i < list.length; i++) {
+      if (stopRef.current) {
+        // Mark every paper that is still in the queue, not only the current one.
+        list = patchJob(list, i, { status: 'error', error: STOPPED_TEXT });
+        setJobs(list);
+        continue;
+      }
       try {
         list = patchJob(list, i, { status: 'extracting', error: undefined });
         setJobs(list);
         const text = await fileToText(list[i].file);
         list = patchJob(list, i, { status: 'analyzing' });
         setJobs(list);
-        const summary = await analyze(p, m, key, text, list[i].filename);
+        const summary = await analyze(p, m, key, text, list[i].filename, signal);
         list = patchJob(list, i, { status: 'done', summary: summary });
         setJobs(list);
       } catch (error) {
-        list = patchJob(list, i, { status: 'error', error: readError(error) });
+        const text = readError(error);
+        // After Stop, the in-flight abort can surface as a raw browser error.
+        list = patchJob(list, i, {
+          status: 'error',
+          error: stopRef.current || text === 'Stopped.' ? STOPPED_TEXT : text,
+        });
         setJobs(list);
       }
     }
@@ -152,13 +200,31 @@ export default function App() {
     setJobs((prev) =>
       patchJob(prev, index, { status: 'extracting', error: undefined, summary: undefined }),
     );
+
+    stopRef.current = false;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const text = await fileToText(job.file);
       setJobs((prev) => patchJob(prev, index, { status: 'analyzing' }));
-      const summary = await analyze(provider, model, keys[provider], text, job.filename);
+      const summary = await analyze(
+        provider,
+        model,
+        keys[provider],
+        text,
+        job.filename,
+        controller.signal,
+      );
       setJobs((prev) => patchJob(prev, index, { status: 'done', summary: summary }));
     } catch (error) {
-      setJobs((prev) => patchJob(prev, index, { status: 'error', error: readError(error) }));
+      const text = readError(error);
+      setJobs((prev) =>
+        patchJob(prev, index, {
+          status: 'error',
+          error: stopRef.current || text === 'Stopped.' ? STOPPED_TEXT : text,
+        }),
+      );
     }
   }
 
@@ -183,7 +249,7 @@ export default function App() {
         </header>
 
         <section className="block">
-          <h2>Provider</h2>
+          <h2>1 · Provider</h2>
           <p className="hint">Choose a provider.</p>
           <div className="cards">
             <label className={provider === 'deepseek' ? 'card card-on' : 'card'}>
@@ -242,7 +308,7 @@ export default function App() {
         </section>
 
         <section className="block">
-          <h2>Files</h2>
+          <h2>2 · Files</h2>
           <label className="file-button">
             Add files
             <input
@@ -279,6 +345,11 @@ export default function App() {
           </button>
           {message !== '' ? <p className="warn">{message}</p> : null}
         </section>
+
+        <footer className="foot">
+          The API key stays in your browser. Files never leave it except as text sent to the
+          provider.
+        </footer>
       </main>
     );
   }
@@ -318,6 +389,13 @@ export default function App() {
         <p className="hint">
           {doneOrFailed} of {jobs.length} papers complete.
         </p>
+
+        <div className="stop-row">
+          <button type="button" className="secondary" onClick={stopAnalysis}>
+            Stop
+          </button>
+          <span className="hint">The finished papers stay.</span>
+        </div>
 
         <ol className="queue">
           {jobs.map((job) => (
