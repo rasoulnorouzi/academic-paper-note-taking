@@ -48,13 +48,13 @@ export const FIELDS: FieldSpec[] = [
     key: 'problemAndGap',
     kind: 'string',
     description:
-      "The problem the paper addresses and the specific gap in prior work. Do NOT state the paper's own aims, methods, or findings here.",
+      "Two or three paragraphs. Explain the problem the paper addresses, the context that makes it matter, and the specific gap or shortcoming in prior work, naming the prior approaches the authors cite. Do NOT state the paper's own aims, methods, or findings here.",
   },
   {
     key: 'objective',
     kind: 'string',
     description:
-      'What the paper sets out to do, in 1-2 sentences. Do NOT restate the problem; problemAndGap covers that.',
+      'What the paper sets out to do and the scope of that goal, in 2-4 sentences. Do NOT restate the problem; problemAndGap covers that.',
   },
   {
     key: 'researchQuestions',
@@ -66,31 +66,37 @@ export const FIELDS: FieldSpec[] = [
     key: 'method',
     kind: 'string',
     description:
-      'Research design, procedure, and analysis approach. Do NOT describe the dataset or sample here, and do NOT report results.',
+      'A full account of the research design, each procedure step, and the analysis approach, including the model or system architecture where relevant. Use as many sentences as the paper needs. Do NOT describe the dataset or sample here, and do NOT report results.',
   },
   {
     key: 'dataAndMaterials',
     kind: 'string',
     description:
-      'Datasets, sample size, population, instruments, and software or tools. Do NOT describe the procedure; method covers that.',
+      'All datasets, sample sizes, populations, instruments, hardware, and software or tools, with their exact names and numbers. Do NOT describe the procedure; method covers that.',
   },
   {
     key: 'findings',
     kind: 'list',
     description:
-      'Each item is one concrete result with the reported numbers (values, effect sizes, p-values, accuracies). Facts only, no interpretation.',
+      'Every significant result, one item per result, with the exact reported numbers (values, percentages, effect sizes, p-values, accuracies). Cover all result tables and ablations the text reports. Facts only, no interpretation.',
   },
   {
     key: 'interpretationAndImplications',
     kind: 'string',
     description:
-      "The authors' interpretation of the findings, how they relate to prior work, and the implications for the field or practice. Do NOT repeat the numbers; findings covers those.",
+      "Two or three paragraphs. The authors' interpretation of each main finding, how the findings relate to prior work (agreement or contradiction), why the authors think the results occurred, and the implications for the field or practice. Do NOT repeat the numbers; findings covers those.",
+  },
+  {
+    key: 'keyQuotes',
+    kind: 'list',
+    description:
+      'Five to ten sentences copied verbatim from the paper that carry its core claims, definitions, or results. Copy each sentence exactly as printed. No paraphrase, no added words.',
   },
   {
     key: 'contributions',
     kind: 'list',
     description:
-      'What is new relative to prior work. Tag each item as theoretical, empirical, or methodological. Do NOT restate findings items verbatim.',
+      'The complete list of what is new relative to prior work. Tag each item as theoretical, empirical, or methodological. Do NOT restate findings items verbatim.',
   },
   {
     key: 'limitations',
@@ -109,8 +115,9 @@ export const SYSTEM_PROMPT = `You read one academic paper and return its structu
 1. Extract only from the provided text. Use no outside knowledge.
 2. If the paper does not state something, write "Not stated in the paper" for a string field, or return an empty list for a list field.
 3. Each fact belongs in exactly one field. Follow each field's exclusion rules.
-4. Be dense and specific. No filler phrases.
-5. Keep the authors' technical terminology.`;
+4. Be complete. Cover every major point the paper makes. Write full paragraphs where a field asks for paragraphs. No filler phrases.
+5. Keep the authors' technical terminology.
+6. In keyQuotes, copy sentences exactly as printed in the paper.`;
 
 export function geminiResponseSchema(): object {
   const properties: Record<string, object> = {};

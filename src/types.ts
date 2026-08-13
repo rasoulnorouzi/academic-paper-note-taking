@@ -31,6 +31,7 @@ export interface PaperSummary {
   dataAndMaterials: string;
   findings: string[];
   interpretationAndImplications: string;
+  keyQuotes: string[];
   contributions: string[];
   limitations: string[];
   futureWork: string[];

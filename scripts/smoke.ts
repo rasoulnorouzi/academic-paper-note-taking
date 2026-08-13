@@ -33,6 +33,7 @@ const REQUIRED_KEYS: (keyof PaperSummary)[] = [
   'dataAndMaterials',
   'findings',
   'interpretationAndImplications',
+  'keyQuotes',
   'contributions',
   'limitations',
   'futureWork',
@@ -75,6 +76,10 @@ async function runOne(provider: Provider): Promise<boolean> {
   }
   if (!Array.isArray(result.findings) || result.findings.length === 0) {
     console.log(`FAIL ${provider}: findings is empty`);
+    return false;
+  }
+  if (!Array.isArray(result.keyQuotes) || result.keyQuotes.length === 0) {
+    console.log(`FAIL ${provider}: keyQuotes is empty`);
     return false;
   }
   if (typeof result.title !== 'string' || result.title.trim() === '') {

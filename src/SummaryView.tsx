@@ -36,6 +36,20 @@ function ListSection(props: { heading: string; items: string[] }) {
   );
 }
 
+function QuoteSection(props: { heading: string; items: string[] }) {
+  const items = props.items || [];
+  return (
+    <section className="section">
+      <h2>{props.heading}</h2>
+      {items.length === 0 ? (
+        <p>{NONE}</p>
+      ) : (
+        items.map((item, index) => <blockquote key={index}>{item}</blockquote>)
+      )}
+    </section>
+  );
+}
+
 export default function SummaryView(props: { summary: PaperSummary }) {
   const summary = props.summary;
 
@@ -68,6 +82,7 @@ export default function SummaryView(props: { summary: PaperSummary }) {
         heading="Interpretation and Implications"
         value={summary.interpretationAndImplications}
       />
+      <QuoteSection heading="Key Quotes" items={summary.keyQuotes} />
       <ListSection heading="Contributions" items={summary.contributions} />
       <ListSection heading="Limitations" items={summary.limitations} />
       <ListSection heading="Future Work" items={summary.futureWork} />

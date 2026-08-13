@@ -45,6 +45,7 @@ function paperBlock(summary: PaperSummary, number: number): string {
     stringSection('Data and Materials', summary.dataAndMaterials),
     listSection('Findings', summary.findings),
     stringSection('Interpretation and Implications', summary.interpretationAndImplications),
+    quoteSection('Key Quotes', summary.keyQuotes),
     listSection('Contributions', summary.contributions),
     listSection('Limitations', summary.limitations),
     listSection('Future Work', summary.futureWork),
@@ -62,6 +63,14 @@ function listSection(heading: string, items: string[]): string {
     return `## ${heading}\n\n${EMPTY_LIST}`;
   }
   return `## ${heading}\n\n` + items.map((item) => `- ${item}`).join('\n');
+}
+
+// Each quote is its own blockquote, so a blank line must separate them.
+function quoteSection(heading: string, items: string[]): string {
+  if (items.length === 0) {
+    return `## ${heading}\n\n${EMPTY_LIST}`;
+  }
+  return `## ${heading}\n\n` + items.map((item) => `> "${item}"`).join('\n\n');
 }
 
 function textOr(value: string): string {

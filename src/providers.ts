@@ -40,7 +40,9 @@ async function callDeepSeek(model: string, apiKey: string, text: string): Promis
       { role: 'user', content: 'Paper text:\n\n' + text + '\n\nReturn the JSON object now.' },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 8192,
+    // DeepSeek V4 accepts max_tokens up to 393216; detailed notes on dense
+    // papers overflow 8192 and truncate the JSON.
+    max_tokens: 32768,
     temperature: 0.2,
   };
 
@@ -59,8 +61,11 @@ async function callDeepSeek(model: string, apiKey: string, text: string): Promis
   }
 
   const data = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
   };
+  if (data.choices?.[0]?.finish_reason === 'length') {
+    throw new Error('The notes did not fit in the model output limit. Try DeepSeek V4 Pro, or use a shorter paper.');
+  }
   const content = data.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || content.trim() === '') {
     throw new Error(BAD_JSON);

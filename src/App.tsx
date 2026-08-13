@@ -139,11 +139,8 @@ export default function App() {
       }
     }
 
-    let first = list.findIndex((job) => job.status === 'done');
-    if (first < 0) {
-      first = 0;
-    }
-    setViewingIndex(first);
+    // -1 means the full report. The batch ends on that view.
+    setViewingIndex(-1);
     setPhase('results');
   }
 
@@ -294,11 +291,18 @@ export default function App() {
       activeIndex = 0;
     }
     const activeJob = jobs[activeIndex];
+    const doneOrFailed = jobs.filter(
+      (job) => job.status === 'done' || job.status === 'error',
+    ).length;
+    const pct = jobs.length === 0 ? 0 : (100 * doneOrFailed) / jobs.length;
 
     return (
       <main className="page">
         <header className="head">
-          <h1>Analysis in progress</h1>
+          <h1>
+            Analysis in progress
+            <span className="spinner" aria-hidden="true"></span>
+          </h1>
         </header>
 
         {activeJob ? (
@@ -308,6 +312,13 @@ export default function App() {
           </p>
         ) : null}
 
+        <div className="track">
+          <div className="fill" style={{ width: pct + '%' }}></div>
+        </div>
+        <p className="hint">
+          {doneOrFailed} of {jobs.length} papers complete.
+        </p>
+
         <ol className="queue">
           {jobs.map((job) => (
             <li key={job.filename}>
@@ -316,6 +327,12 @@ export default function App() {
             </li>
           ))}
         </ol>
+
+        <section className="block">
+          <h2>Report preview</h2>
+          <p className="hint">The report grows when each paper completes.</p>
+          <pre className="report">{buildMarkdown(jobs, model)}</pre>
+        </section>
       </main>
     );
   }
@@ -339,6 +356,14 @@ export default function App() {
 
       <div className="split">
         <nav className="side">
+          <button
+            type="button"
+            className={viewingIndex === -1 ? 'paper paper-on' : 'paper'}
+            onClick={() => setViewingIndex(-1)}
+          >
+            Full report
+          </button>
+
           <ol className="papers">
             {jobs.map((job, index) => (
               <li key={job.filename}>
@@ -359,7 +384,22 @@ export default function App() {
         </nav>
 
         <div className="content">
-          {!current ? <p>Select a paper.</p> : null}
+          {viewingIndex === -1 ? (
+            <section className="block">
+              <h1>Full report</h1>
+              <pre className="report">{buildMarkdown(jobs, model)}</pre>
+              <button
+                type="button"
+                className="primary"
+                disabled={doneCount === 0}
+                onClick={download}
+              >
+                Download the notes file
+              </button>
+            </section>
+          ) : null}
+
+          {viewingIndex !== -1 && !current ? <p>Select a paper.</p> : null}
 
           {current && current.status === 'done' && current.summary ? (
             <SummaryView summary={current.summary} />
